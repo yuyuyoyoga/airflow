@@ -1,0 +1,4 @@
+pebble
+pandas
+numpy
+pycryptodome
