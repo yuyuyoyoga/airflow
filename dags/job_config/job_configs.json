@@ -1,0 +1,30 @@
+[
+    {
+        "dag_name": "td_reporting",
+        "config": "td_config",
+        "read_class_name" : "read_data_standard",
+        "send_class_name" : "send_data_standard",
+        "schedule": null
+    },
+    {
+        "dag_name": "pnc_reporting",
+        "config": "pnc_config",
+        "read_class_name" : "read_data_standard",
+        "send_class_name" : "send_data_standard",
+        "schedule": null
+    },
+    {
+        "dag_name": "cof_reporting",
+        "config": "cof_config",
+        "read_class_name" : "read_data_standard",
+        "send_class_name" : "send_data_cof",
+        "schedule": null
+    },
+    {
+        "dag_name": "bcs_reporting",
+        "config": "cof_config",
+        "read_class_name" : "read_data_standard",
+        "send_class_name" : "send_data_standard",
+        "schedule": null
+    }
+]

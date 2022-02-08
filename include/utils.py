@@ -1,16 +1,15 @@
-import pandas as pd
-import numpy as np
 import hashlib
 from base64 import b64decode
+from concurrent.futures import TimeoutError
+from datetime import datetime
+from functools import lru_cache
+
+import numpy as np
+import pandas as pd
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
-from functools import lru_cache
-from typing import List, Tuple, Callable
-from concurrent.futures import TimeoutError
 from pebble import ProcessPool, ProcessExpired
-
 from pytz import timezone
-from datetime import datetime
 
 DEFAULT_PARAMS = {
     'encoding': 'utf-8',
@@ -21,6 +20,7 @@ DEFAULT_PARAMS = {
     'pd_alert': False,
     'ruby_clean': []
 }
+
 
 def duration(function: Callable) -> Callable:
     def new_function(*args, **kwargs):
@@ -42,17 +42,6 @@ def duration(function: Callable) -> Callable:
     return new_function
 
 
-import pandas as pd
-import numpy as np
-import hashlib
-from base64 import b64decode
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
-from functools import lru_cache
-from typing import List, Tuple
-from concurrent.futures import TimeoutError
-from pebble import ProcessPool, ProcessExpired
-
 DEFAULT_PARAMS = {
     'encoding': 'utf-8',
     'filter_config': {},
@@ -60,7 +49,8 @@ DEFAULT_PARAMS = {
     'pool_size': 4,
     'multiprocessing': True,
     'pd_alert': False,
-    'ruby_clean': []
+    'ruby_clean': [],
+    'key_config': {}
 }
 
 
@@ -74,9 +64,7 @@ class Decrypt():
 
         self.__dict__.update(DEFAULT_PARAMS)
         self.__dict__.update(kwargs)
-
         self.__dict__.update(decryption_config)
-
         self.df = df
 
     @duration
@@ -138,15 +126,13 @@ class Decrypt():
             output_field = d['output']
             salt_field = '%s_salt' % input_field
             iv_field = '%s_iv' % input_field
-            encryption_config = f'{input_field}_encryption_config' if f'{input_field}_encryption_config' in df.columns else ''
 
-            #             print(f'decrpting {input_field}')
-            df[input_field] = df.apply(lambda row: self.decrypt(
-                self.key_2 if self.key_2 and pd.notna(row.loc[encryption_config]) else self.key_1
-                , row.loc[input_field]
-                , row.loc[salt_field]
-                , row.loc[iv_field]) if self.filters(input_field, row) else row.loc[input_field], axis=1)
-            df.drop(columns=[salt_field, iv_field, encryption_config],
+            df[input_field] = df[[input_field
+                , salt_field
+                , iv_field]].apply(lambda row: self.decrypt(row.loc[input_field]
+                                                            , row.loc[salt_field]
+                                                            , row.loc[iv_field]), axis=1)
+            df.drop(columns=[salt_field, iv_field],
                     axis=1,
                     inplace=True)
 
@@ -155,16 +141,19 @@ class Decrypt():
         return df
 
     def decrypt(self, key, value, salt, iv):
-        if key is None or value is None or pd.isna(value) or salt is None or iv is None:
+        if self.key is None or value is None or pd.isna(value) or salt is None or iv is None:
             return None
         else:
-            value = b64decode(value)
-            iv = b64decode(iv)
-            salt = b64decode(salt) if len(salt) == 26 else bytes(salt, "utf-8")
-            salted_key = self.__salt_key(bytes(key, "utf-8"), salt)
-            cipher = AES.new(salted_key, AES.MODE_CBC, iv)
-            pt = unpad(cipher.decrypt(value), AES.block_size)
-            return pt.decode(self.encoding)
+            try:
+                value = b64decode(value)
+                iv = b64decode(iv)
+                salt = b64decode(salt) if len(salt) == 26 else bytes(salt, "utf-8")
+                salted_key = self.__salt_key(bytes(self.key, "utf-8"), salt)
+                cipher = AES.new(salted_key, AES.MODE_CBC, iv)
+                pt = unpad(cipher.decrypt(value), AES.block_size)
+                return pt.decode(self.encoding)
+            except:
+                return value
 
     @lru_cache(maxsize=None)
     # Decorator to wrap a function with a memoizing callable that saves up to the maxsize most recent calls.
@@ -172,30 +161,3 @@ class Decrypt():
     # https://docs.python.org/3/library/functools.html
     def __salt_key(self, key, salt, key_length=32):
         return hashlib.pbkdf2_hmac('sha1', key, salt, 2000, key_length)
-
-    def filters(self, field_name: str, row: pd.Series) -> bool:
-        if self.filter_config:
-            return self.__time_filters(
-                field_name,
-                row,
-                **self.filter_config)
-        else:
-            return True
-
-    def __time_filters(
-            self,
-            field_name: str,
-            row: pd.Series,
-            start_timestamp: str,
-            end_timestamp: str,
-            exclude_ids: List,
-            *args,
-            **kargs) -> bool:
-        field_name = field_name.lower()
-        existing_fields = [
-            "encrypted_ssn",
-            "encrypted_date_of_birth",
-            "encrypted_letter_last_four_digits_ssn",
-            "encrypted_bank_account_number"]
-        return ((pd.to_datetime(start_timestamp) < pd.to_datetime(row.loc['event_created_time']) < pd.to_datetime(
-            end_timestamp) and (row.loc['application_id']) not in exclude_ids) or field_name in existing_fields)

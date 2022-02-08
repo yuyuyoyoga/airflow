@@ -1,17 +1,19 @@
-from airflow import DAG
-from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.bash_operator import BashOperator
-from airflow.operators.python_operator import PythonOperator
-from airflow.version import version
 from datetime import datetime, timedelta
 
+from airflow import DAG
+from airflow.operators.bash_operator import BashOperator
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.python_operator import PythonOperator
+from airflow.version import version
 
-def my_custom_function(ts,**kwargs):
+
+def my_custom_function(ts, **z):
     """
     This can be any python code you want and is called from the python operator. The code is not executed until
     the task is run by the airflow scheduler.
     """
-    print(f"I am task number {kwargs['task_number']}. This DAG Run execution date is {ts} and the current time is {datetime.now()}")
+    print(
+        f"I am task number {kwargs['task_number']}. This DAG Run execution date is {ts} and the current time is {datetime.now()}")
     print('Here is the full DAG Run context. It is available because provide_context=True')
     print(kwargs)
 
@@ -34,7 +36,6 @@ with DAG('example_dag',
          default_args=default_args,
          # catchup=False # enable if you don't want historical dag runs to run
          ) as dag:
-
     t0 = DummyOperator(
         task_id='start'
     )
@@ -65,8 +66,7 @@ with DAG('example_dag',
                 provide_context=True,
             )
 
-
-        t0 >> tn # indented inside for loop so each task is added downstream of t0
+        t0 >> tn  # indented inside for loop so each task is added downstream of t0
 
     t0 >> t1
-    t1 >> [t2, t3] # lists can be used to specify multiple tasks
+    t1 >> [t2, t3]  # lists can be used to specify multiple tasks
